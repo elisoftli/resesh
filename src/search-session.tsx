@@ -71,7 +71,7 @@ export default function SearchSessionCommand() {
 
   const { data: projects } = usePromise(discoverProjects);
 
-  const abortable = useRef<AbortController>();
+  const abortable = useRef<AbortController>(null);
   const { data: results, isLoading } = usePromise(
     searchSessions,
     [debouncedQuery, projectFilter === "all" ? null : projectFilter],

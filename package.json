@@ -4,7 +4,7 @@
   "title": "Recall",
   "description": "Search and resume Claude Code sessions",
   "icon": "extension-icon.png",
-  "author": "eli_revah",
+  "author": "Elisoft",
   "platforms": [
     "macOS",
     "Windows"
