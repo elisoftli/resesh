@@ -22,7 +22,7 @@ function isRealUserPrompt(content: string): boolean {
   );
 }
 
-function isUserMessage(rec: Record<string, unknown>): rec is { message: { content: string }; timestamp?: string } {
+function isUserMessage(rec: Record<string, unknown>): boolean {
   return (
     rec.type === "user" &&
     !rec.isMeta &&

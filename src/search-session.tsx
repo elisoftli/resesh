@@ -78,7 +78,10 @@ export default function SearchSessionCommand() {
     { abortable },
   );
 
-  const grouped = useMemo(() => (results ? groupByProject(results) : new Map()), [results]);
+  const grouped = useMemo(
+    () => (results ? groupByProject(results) : new Map<string, SessionSearchResult[]>()),
+    [results],
+  );
 
   return (
     <List
