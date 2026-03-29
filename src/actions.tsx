@@ -52,10 +52,6 @@ function toastOnError(label: string) {
   };
 }
 
-function resumeCommand(sessionId: string): string {
-  return `claude --resume ${sessionId}`;
-}
-
 function escapeShellArg(s: string): string {
   if (isMac) {
     return `'${s.replace(/'/g, "'\\''")}'`;
@@ -63,13 +59,13 @@ function escapeShellArg(s: string): string {
   return `"${s.replace(/"/g, '\\"')}"`;
 }
 
-function bashCommand(dir: string, sessionId: string): string {
+function bashCommand(dir: string, resumeCmd: string): string {
   const escapedDir = dir.replace(/'/g, "'\\''");
-  return `export PATH="$HOME/.local/bin:$PATH" && cd '${escapedDir}' && ${resumeCommand(sessionId)}`;
+  return `export PATH="$HOME/.local/bin:$PATH" && cd '${escapedDir}' && ${resumeCmd}`;
 }
 
-function macAppleScriptLaunch(appName: string, session: SessionInfo) {
-  const cmd = bashCommand(session.projectPath, session.sessionId);
+function macAppleScriptLaunch(appName: string, session: SessionInfo, resumeCmd: string) {
+  const cmd = bashCommand(session.projectPath, resumeCmd);
   const script = `tell application "${appName}"
   activate
   do script "${cmd.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"
@@ -77,18 +73,22 @@ end tell`;
   execFile("osascript", ["-e", script], toastOnError(appName));
 }
 
-function openInTerminal(session: SessionInfo) {
+function openInTerminal(session: SessionInfo, resumeCmd: string) {
   const prefs = getPreferenceValues<Preferences>();
   const terminal = resolveTerminal(prefs.terminal ?? "default");
   const dir = session.projectPath;
-  const bashCmd = bashCommand(dir, session.sessionId);
+  const bashCmd = bashCommand(dir, resumeCmd);
 
   if (isMac) {
     switch (terminal) {
       case "terminal":
       case "iterm":
       case "warp":
-        macAppleScriptLaunch(terminal === "terminal" ? "Terminal" : terminal === "iterm" ? "iTerm" : "Warp", session);
+        macAppleScriptLaunch(
+          terminal === "terminal" ? "Terminal" : terminal === "iterm" ? "iTerm" : "Warp",
+          session,
+          resumeCmd,
+        );
         return;
       case "ghostty":
         execFile(
@@ -117,7 +117,7 @@ function openInTerminal(session: SessionInfo) {
     }
   } else {
     const winDir = dir.replace(/\//g, "\\");
-    const cmd = resumeCommand(session.sessionId);
+    const cmd = resumeCmd;
     switch (terminal) {
       case "wt":
         exec(`wt.exe -d ${escapeShellArg(winDir)} cmd /k "${cmd}"`, toastOnError("Windows Terminal"));
@@ -158,10 +158,10 @@ function openInIDE(session: SessionInfo) {
   }
 }
 
-export function SessionActions({ session }: { session: SessionInfo }) {
+export function SessionActions({ session, resumeCommand }: { session: SessionInfo; resumeCommand: string }) {
   return (
     <ActionPanel>
-      <Action title="Open in Terminal" icon={Icon.Terminal} onAction={() => openInTerminal(session)} />
+      <Action title="Open in Terminal" icon={Icon.Terminal} onAction={() => openInTerminal(session, resumeCommand)} />
       <Action
         title="Copy Session ID"
         icon={Icon.Clipboard}
