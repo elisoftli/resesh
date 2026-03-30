@@ -9,6 +9,7 @@ import {
   Toast,
 } from "@raycast/api";
 import { exec, execFile } from "child_process";
+import { wslUncPath } from "./providers/wsl";
 import type { SessionInfo } from "./types";
 
 interface Preferences {
@@ -73,6 +74,10 @@ end tell`;
   execFile("osascript", ["-e", script], toastOnError(appName));
 }
 
+function sessionUncPath(session: SessionInfo): string {
+  return wslUncPath(session.wslDistro!, session.projectPath);
+}
+
 function openInTerminal(session: SessionInfo, resumeCmd: string) {
   const prefs = getPreferenceValues<Preferences>();
   const terminal = resolveTerminal(prefs.terminal ?? "default");
@@ -116,32 +121,53 @@ function openInTerminal(session: SessionInfo, resumeCmd: string) {
         return;
     }
   } else {
-    const winDir = dir.replace(/\//g, "\\");
-    const cmd = resumeCmd;
+    // Windows: for WSL sessions resumeCmd already contains the full `wsl -d ...` command,
+    // so no working-directory flag is needed. For native sessions, set the working directory.
+    const winDir = session.wslDistro ? null : dir.replace(/\//g, "\\");
     switch (terminal) {
       case "wt":
-        exec(`wt.exe -d ${escapeShellArg(winDir)} cmd /k "${cmd}"`, toastOnError("Windows Terminal"));
+        exec(
+          winDir ? `wt.exe -d ${escapeShellArg(winDir)} cmd /k "${resumeCmd}"` : `wt.exe cmd /k "${resumeCmd}"`,
+          toastOnError("Windows Terminal"),
+        );
         return;
       case "powershell":
         exec(
-          `start powershell -NoExit -Command "Set-Location ${escapeShellArg(winDir)}; ${cmd}"`,
+          winDir
+            ? `start powershell -NoExit -Command "Set-Location ${escapeShellArg(winDir)}; ${resumeCmd}"`
+            : `start powershell -NoExit -Command "${resumeCmd}"`,
           toastOnError("PowerShell"),
         );
         return;
       case "cmd":
-        exec(`start cmd /k "cd /d ${winDir} && ${cmd}"`, toastOnError("Command Prompt"));
+        exec(
+          winDir ? `start cmd /k "cd /d ${winDir} && ${resumeCmd}"` : `start cmd /k "${resumeCmd}"`,
+          toastOnError("Command Prompt"),
+        );
         return;
       case "warp":
         exec(
-          `warp-terminal.exe --working-directory ${escapeShellArg(winDir)} -e cmd /k "${cmd}"`,
+          winDir
+            ? `warp-terminal.exe --working-directory ${escapeShellArg(winDir)} -e cmd /k "${resumeCmd}"`
+            : `warp-terminal.exe -e cmd /k "${resumeCmd}"`,
           toastOnError("Warp"),
         );
         return;
       case "alacritty":
-        exec(`alacritty --working-directory ${escapeShellArg(winDir)} -e cmd /k "${cmd}"`, toastOnError("Alacritty"));
+        exec(
+          winDir
+            ? `alacritty --working-directory ${escapeShellArg(winDir)} -e cmd /k "${resumeCmd}"`
+            : `alacritty -e cmd /k "${resumeCmd}"`,
+          toastOnError("Alacritty"),
+        );
         return;
       case "wezterm":
-        exec(`wezterm start --cwd ${escapeShellArg(winDir)} -- cmd /k "${cmd}"`, toastOnError("WezTerm"));
+        exec(
+          winDir
+            ? `wezterm start --cwd ${escapeShellArg(winDir)} -- cmd /k "${resumeCmd}"`
+            : `wezterm start -- cmd /k "${resumeCmd}"`,
+          toastOnError("WezTerm"),
+        );
         return;
     }
   }
@@ -154,7 +180,8 @@ function openInIDE(session: SessionInfo) {
   if (isMac) {
     execFile("open", ["-a", appName, session.projectPath], toastOnError(appName));
   } else {
-    exec(`start "" "${appName}" "${session.projectPath.replace(/\//g, "\\")}"`, toastOnError(appName));
+    const idePath = session.wslDistro ? sessionUncPath(session) : session.projectPath.replace(/\//g, "\\");
+    exec(`start "" "${appName}" "${idePath}"`, toastOnError(appName));
   }
 }
 
@@ -175,7 +202,7 @@ export function SessionActions({ session, resumeCommand }: { session: SessionInf
         title="Open in Finder"
         icon={Icon.Finder}
         shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
-        onAction={() => showInFinder(session.projectPath)}
+        onAction={() => showInFinder(session.wslDistro ? sessionUncPath(session) : session.projectPath)}
       />
       <Action
         title="Open in IDE"

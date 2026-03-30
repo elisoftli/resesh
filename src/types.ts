@@ -7,6 +7,7 @@ export interface SessionInfo {
   firstUserPrompt: string | null;
   lastModified: number;
   gitBranch: string | null;
+  wslDistro?: string;
 }
 
 export interface MessageSnippet {

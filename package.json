@@ -51,6 +51,15 @@
       ]
     },
     {
+      "name": "includeWsl",
+      "title": "Include WSL Sessions (Windows)",
+      "description": "Also search for sessions inside WSL distributions (minor performance impact)",
+      "type": "checkbox",
+      "required": false,
+      "default": false,
+      "label": "Include WSL sessions"
+    },
+    {
       "name": "ide",
       "title": "IDE",
       "description": "IDE to open projects in",

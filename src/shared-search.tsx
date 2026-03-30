@@ -2,8 +2,14 @@ import { Color, Icon, List } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SessionActions } from "./actions";
+import { parseWslFilter } from "./providers/wsl";
 import type { SessionProvider } from "./providers/types";
 import type { MessageSnippet, SessionSearchResult } from "./types";
+
+function wslDropdownLabel(dir: string, label: string): string {
+  const wsl = parseWslFilter(dir);
+  return wsl ? `[${wsl.distro}] ${label}` : label;
+}
 
 function useDebouncedValue<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -105,7 +111,12 @@ export function SessionSearchView({ provider }: { provider: SessionProvider }) {
           <List.Dropdown.Item title="All Projects" value="all" icon={Icon.AppWindowGrid3x3} />
           <List.Dropdown.Section title="Projects">
             {projects?.map((p) => (
-              <List.Dropdown.Item key={p.dir} title={p.label} value={p.dir} icon={Icon.Folder} />
+              <List.Dropdown.Item
+                key={p.dir}
+                title={wslDropdownLabel(p.dir, p.label)}
+                value={p.dir}
+                icon={Icon.Folder}
+              />
             ))}
           </List.Dropdown.Section>
         </List.Dropdown>
@@ -121,7 +132,11 @@ export function SessionSearchView({ provider }: { provider: SessionProvider }) {
         Array.from(grouped.entries()).map(([projectDir, items]) => (
           <List.Section
             key={projectDir}
-            title={items[0].session.projectLabel}
+            title={
+              items[0].session.wslDistro
+                ? `[${items[0].session.wslDistro}] ${items[0].session.projectLabel}`
+                : items[0].session.projectLabel
+            }
             subtitle={`${items.length} session${items.length > 1 ? "s" : ""}`}
           >
             {items.map((result) => (
@@ -133,10 +148,7 @@ export function SessionSearchView({ provider }: { provider: SessionProvider }) {
                   <List.Item.Detail markdown={sessionDetailMarkdown(result, isSearching, provider.assistantLabel)} />
                 }
                 actions={
-                  <SessionActions
-                    session={result.session}
-                    resumeCommand={provider.resumeCommand(result.session.sessionId)}
-                  />
+                  <SessionActions session={result.session} resumeCommand={provider.resumeCommand(result.session)} />
                 }
               />
             ))}

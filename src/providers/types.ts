@@ -1,4 +1,4 @@
-import type { ProjectInfo, SessionSearchResult } from "../types";
+import type { ProjectInfo, SessionInfo, SessionSearchResult } from "../types";
 
 export interface SessionProvider {
   readonly id: string;
@@ -7,7 +7,7 @@ export interface SessionProvider {
   readonly searchPlaceholder: string;
   readonly emptyStateText: string;
 
-  resumeCommand(sessionId: string): string;
+  resumeCommand(session: SessionInfo): string;
   discoverProjects(): Promise<ProjectInfo[]>;
   searchSessions(query: string, projectFilter: string | null, signal?: AbortSignal): Promise<SessionSearchResult[]>;
 }

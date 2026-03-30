@@ -19,13 +19,14 @@ Search and resume your [Claude Code](https://docs.anthropic.com/en/docs/claude-c
 
 ## Setup
 
-No API keys or credentials required. The extension reads session files stored locally by Claude Code (`~/.claude/projects/`) and Codex CLI (`~/.codex/sessions/`).
+No API keys or credentials required. The extension reads session files stored locally by Claude Code (`~/.claude/projects/`) and Codex CLI (`~/.codex/sessions/`). On Windows, sessions from WSL installations can also be included (see preferences).
 
 ### Preferences
 
 | Preference | Description | Default |
 |---|---|---|
 | Terminal | Terminal app used to resume sessions | Default (Terminal.app on macOS, Windows Terminal on Windows) |
+| Include WSL Sessions | Also search for sessions inside WSL distributions (Windows only, minor performance impact) | Off |
 | IDE | IDE used to open project directories | VS Code |
 
 **Supported terminals:** Terminal.app, iTerm2, Ghostty, Kitty, Warp, Alacritty, WezTerm, Windows Terminal, PowerShell, Command Prompt
