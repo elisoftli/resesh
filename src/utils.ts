@@ -9,7 +9,7 @@ export function getProjectLabel(projectPath: string): string {
   return segments.slice(-2).join("/");
 }
 
-export function extractSnippet(text: string, query: string, windowSize = 120): string {
+export function extractSnippet(text: string, query: string, windowSize = 400): string {
   const lowerText = text.toLowerCase();
   const lowerQuery = query.toLowerCase();
   const pos = lowerText.indexOf(lowerQuery);
@@ -42,8 +42,9 @@ export function collectMessage(
     collector.firstUserPrompt = content.slice(0, 200);
   }
 
-  if (collector.preview.length < MAX_PREVIEW_TURNS) {
-    collector.preview.push({ text: content.slice(0, 300), source, timestamp });
+  collector.preview.push({ text: content.slice(0, 1000), source, timestamp });
+  if (collector.preview.length > MAX_PREVIEW_TURNS) {
+    collector.preview.shift();
   }
 
   if (lowerQuery && content.toLowerCase().includes(lowerQuery)) {

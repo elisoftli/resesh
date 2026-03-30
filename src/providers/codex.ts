@@ -119,7 +119,7 @@ export const codexProvider: SessionProvider = {
   emptyStateText: "No Codex CLI sessions found in ~/.codex/sessions",
 
   resumeCommand(sessionId: string): string {
-    return `codex --resume ${sessionId}`;
+    return `codex resume ${sessionId}`;
   },
 
   async discoverProjects(): Promise<ProjectInfo[]> {
