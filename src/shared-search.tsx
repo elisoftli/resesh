@@ -53,11 +53,20 @@ function snippetToMarkdown(msg: MessageSnippet, assistantLabel: string): string 
 function sessionDetailMarkdown(result: SessionSearchResult, isSearching: boolean, assistantLabel: string): string {
   if (isSearching && result.matches.length > 0) {
     const header = `### ${result.matches.length} Match${result.matches.length > 1 ? "es" : ""}\n\n`;
-    return header + [...result.matches].reverse().map((m) => snippetToMarkdown(m, assistantLabel)).join("\n\n---\n\n");
+    return (
+      header +
+      [...result.matches]
+        .reverse()
+        .map((m) => snippetToMarkdown(m, assistantLabel))
+        .join("\n\n---\n\n")
+    );
   }
 
   if (result.preview.length > 0) {
-    return [...result.preview].reverse().map((m) => snippetToMarkdown(m, assistantLabel)).join("\n\n---\n\n");
+    return [...result.preview]
+      .reverse()
+      .map((m) => snippetToMarkdown(m, assistantLabel))
+      .join("\n\n---\n\n");
   }
 
   return "*No content available*";
