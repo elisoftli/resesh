@@ -159,7 +159,7 @@ export const codexProvider: SessionProvider = {
 
   resumeCommand(session): string {
     if (session.wslDistro) {
-      return `wsl -d ${session.wslDistro} --cd ${session.projectPath} -- codex resume ${session.sessionId}`;
+      return `wsl -d ${session.wslDistro} --cd ${session.projectPath} -- bash -lic 'codex resume ${session.sessionId}'`;
     }
     return `codex resume ${session.sessionId}`;
   },

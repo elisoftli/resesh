@@ -204,7 +204,7 @@ export const claudeProvider: SessionProvider = {
 
   resumeCommand(session): string {
     if (session.wslDistro) {
-      return `wsl -d ${session.wslDistro} --cd ${session.projectPath} -- claude --resume ${session.sessionId}`;
+      return `wsl -d ${session.wslDistro} --cd ${session.projectPath} -- bash -lic 'claude --resume ${session.sessionId}'`;
     }
     return `claude --resume ${session.sessionId}`;
   },

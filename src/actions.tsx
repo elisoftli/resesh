@@ -37,12 +37,12 @@ function resolveTerminal(pref: string): string {
   return pref;
 }
 
-const IDE_APPS: Record<string, string> = {
-  vscode: "Visual Studio Code",
-  cursor: "Cursor",
-  zed: "Zed",
-  webstorm: "WebStorm",
-  intellij: "IntelliJ IDEA",
+const IDE_APPS: Record<string, { name: string; cmd: string }> = {
+  vscode: { name: "Visual Studio Code", cmd: "code" },
+  cursor: { name: "Cursor", cmd: "cursor" },
+  zed: { name: "Zed", cmd: "zed" },
+  webstorm: { name: "WebStorm", cmd: "webstorm" },
+  intellij: { name: "IntelliJ IDEA", cmd: "idea" },
 };
 
 function toastOnError(label: string) {
@@ -175,13 +175,14 @@ function openInTerminal(session: SessionInfo, resumeCmd: string) {
 
 function openInIDE(session: SessionInfo) {
   const prefs = getPreferenceValues<Preferences>();
-  const appName = IDE_APPS[prefs.ide] ?? "Visual Studio Code";
+  const ide = IDE_APPS[prefs.ide] ?? IDE_APPS.vscode;
 
   if (isMac) {
-    execFile("open", ["-a", appName, session.projectPath], toastOnError(appName));
+    execFile("open", ["-a", ide.name, session.projectPath], toastOnError(ide.name));
+  } else if (session.wslDistro) {
+    exec(`${ide.cmd} --remote wsl+${session.wslDistro} ${escapeShellArg(session.projectPath)}`, toastOnError(ide.name));
   } else {
-    const idePath = session.wslDistro ? sessionUncPath(session) : session.projectPath.replace(/\//g, "\\");
-    exec(`start "" "${appName}" "${idePath}"`, toastOnError(appName));
+    exec(`${ide.cmd} ${escapeShellArg(session.projectPath.replace(/\//g, "\\"))}`, toastOnError(ide.name));
   }
 }
 
@@ -199,7 +200,7 @@ export function SessionActions({ session, resumeCommand }: { session: SessionInf
         }}
       />
       <Action
-        title="Open in Finder"
+        title="Open in File Explorer"
         icon={Icon.Finder}
         shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
         onAction={() => showInFinder(session.wslDistro ? sessionUncPath(session) : session.projectPath)}
