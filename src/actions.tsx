@@ -22,7 +22,7 @@ const isMac = process.platform === "darwin";
 const MAC_ONLY_TERMINALS = new Set(["terminal", "iterm", "ghostty", "kitty"]);
 const WIN_ONLY_TERMINALS = new Set(["wt", "powershell", "cmd"]);
 
-function resolveTerminal(pref: string): string {
+export function resolveTerminal(pref: string): string {
   if (pref === "default") return isMac ? "terminal" : "wt";
 
   if (isMac && WIN_ONLY_TERMINALS.has(pref)) {
@@ -53,14 +53,14 @@ function toastOnError(label: string) {
   };
 }
 
-function escapeShellArg(s: string): string {
+export function escapeShellArg(s: string): string {
   if (isMac) {
     return `'${s.replace(/'/g, "'\\''")}'`;
   }
   return `"${s.replace(/"/g, '\\"')}"`;
 }
 
-function bashCommand(dir: string, resumeCmd: string): string {
+export function bashCommand(dir: string, resumeCmd: string): string {
   const escapedDir = dir.replace(/'/g, "'\\''");
   return `export PATH="$HOME/.local/bin:$PATH" && cd '${escapedDir}' && ${resumeCmd}`;
 }

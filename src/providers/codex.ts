@@ -36,24 +36,24 @@ const WSL_SESSION_SCAN_SCRIPT = [
 
 // ----- JSONL record helpers -----
 
-function sessionIdFromFilename(filename: string): string {
+export function sessionIdFromFilename(filename: string): string {
   const m = UUID_RE.exec(filename);
   return m ? m[1] : filename.replace(".jsonl", "");
 }
 
-function isUserMessage(rec: Record<string, unknown>): boolean {
+export function isUserMessage(rec: Record<string, unknown>): boolean {
   if (rec.type !== "event_msg") return false;
   const payload = rec.payload as Record<string, unknown> | undefined;
   return payload?.type === "user_message" && typeof payload?.message === "string";
 }
 
-function isAgentMessage(rec: Record<string, unknown>): boolean {
+export function isAgentMessage(rec: Record<string, unknown>): boolean {
   if (rec.type !== "event_msg") return false;
   const payload = rec.payload as Record<string, unknown> | undefined;
   return payload?.type === "agent_message" && typeof payload?.message === "string";
 }
 
-function processRecord(
+export function processRecord(
   rec: Record<string, unknown>,
   state: { cwd: string | null; sessionId: string | null },
   collector: MessageCollector,

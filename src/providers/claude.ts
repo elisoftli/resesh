@@ -46,7 +46,7 @@ const WSL_SESSION_SCAN_SCRIPT = [
 
 // ----- JSONL record helpers -----
 
-function isRealUserPrompt(content: string): boolean {
+export function isRealUserPrompt(content: string): boolean {
   return (
     !content.startsWith("<command-name>") &&
     !content.startsWith("<command-message>") &&
@@ -55,7 +55,7 @@ function isRealUserPrompt(content: string): boolean {
   );
 }
 
-function isUserMessage(rec: Record<string, unknown>): boolean {
+export function isUserMessage(rec: Record<string, unknown>): boolean {
   return (
     rec.type === "user" &&
     !rec.isMeta &&
@@ -68,7 +68,7 @@ function getUserContent(rec: Record<string, unknown>): string {
   return (rec.message as { content: string }).content;
 }
 
-function getFirstTextBlock(content: unknown[]): string | null {
+export function getFirstTextBlock(content: unknown[]): string | null {
   for (const block of content) {
     if (typeof block === "object" && block !== null && "type" in block && "text" in block) {
       const b = block as { type: string; text: string };
@@ -80,7 +80,7 @@ function getFirstTextBlock(content: unknown[]): string | null {
   return null;
 }
 
-function processRecord(
+export function processRecord(
   rec: Record<string, unknown>,
   state: { cwd: string | null; customTitle: string | null; gitBranch: string | null },
   collector: MessageCollector,
@@ -103,7 +103,7 @@ function processRecord(
   }
 }
 
-function buildResult(
+export function buildResult(
   state: { cwd: string | null; customTitle: string | null; gitBranch: string | null },
   collector: MessageCollector,
   sessionId: string,

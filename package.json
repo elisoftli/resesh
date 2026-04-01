@@ -37,17 +37,50 @@
       "required": false,
       "default": "default",
       "data": [
-        { "title": "Default", "value": "default" },
-        { "title": "Terminal.app (macOS)", "value": "terminal" },
-        { "title": "iTerm2 (macOS)", "value": "iterm" },
-        { "title": "Ghostty (macOS)", "value": "ghostty" },
-        { "title": "Kitty (macOS)", "value": "kitty" },
-        { "title": "Warp", "value": "warp" },
-        { "title": "Alacritty", "value": "alacritty" },
-        { "title": "WezTerm", "value": "wezterm" },
-        { "title": "Windows Terminal (Windows)", "value": "wt" },
-        { "title": "PowerShell (Windows)", "value": "powershell" },
-        { "title": "Command Prompt (Windows)", "value": "cmd" }
+        {
+          "title": "Default",
+          "value": "default"
+        },
+        {
+          "title": "Terminal.app (macOS)",
+          "value": "terminal"
+        },
+        {
+          "title": "iTerm2 (macOS)",
+          "value": "iterm"
+        },
+        {
+          "title": "Ghostty (macOS)",
+          "value": "ghostty"
+        },
+        {
+          "title": "Kitty (macOS)",
+          "value": "kitty"
+        },
+        {
+          "title": "Warp",
+          "value": "warp"
+        },
+        {
+          "title": "Alacritty",
+          "value": "alacritty"
+        },
+        {
+          "title": "WezTerm",
+          "value": "wezterm"
+        },
+        {
+          "title": "Windows Terminal (Windows)",
+          "value": "wt"
+        },
+        {
+          "title": "PowerShell (Windows)",
+          "value": "powershell"
+        },
+        {
+          "title": "Command Prompt (Windows)",
+          "value": "cmd"
+        }
       ]
     },
     {
@@ -67,11 +100,26 @@
       "required": false,
       "default": "vscode",
       "data": [
-        { "title": "VS Code", "value": "vscode" },
-        { "title": "Cursor", "value": "cursor" },
-        { "title": "Zed", "value": "zed" },
-        { "title": "WebStorm", "value": "webstorm" },
-        { "title": "IntelliJ IDEA", "value": "intellij" }
+        {
+          "title": "VS Code",
+          "value": "vscode"
+        },
+        {
+          "title": "Cursor",
+          "value": "cursor"
+        },
+        {
+          "title": "Zed",
+          "value": "zed"
+        },
+        {
+          "title": "WebStorm",
+          "value": "webstorm"
+        },
+        {
+          "title": "IntelliJ IDEA",
+          "value": "intellij"
+        }
       ]
     }
   ],
@@ -85,13 +133,16 @@
     "@types/react": "19.0.10",
     "eslint": "^9.22.0",
     "prettier": "^3.5.3",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.2"
   },
   "scripts": {
     "build": "ray build",
     "dev": "ray develop",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
     "publish": "npx @raycast/api@latest publish"
   }

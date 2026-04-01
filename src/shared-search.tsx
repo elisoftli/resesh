@@ -6,7 +6,7 @@ import { parseWslFilter } from "./providers/wsl";
 import type { SessionProvider } from "./providers/types";
 import type { MessageSnippet, SessionSearchResult } from "./types";
 
-function wslDropdownLabel(dir: string, label: string): string {
+export function wslDropdownLabel(dir: string, label: string): string {
   const wsl = parseWslFilter(dir);
   return wsl ? `[${wsl.distro}] ${label}` : label;
 }
@@ -20,7 +20,7 @@ function useDebouncedValue<T>(value: T, delay: number): T {
   return debounced;
 }
 
-function groupByProject(results: SessionSearchResult[]): Map<string, SessionSearchResult[]> {
+export function groupByProject(results: SessionSearchResult[]): Map<string, SessionSearchResult[]> {
   const groups = new Map<string, SessionSearchResult[]>();
   for (const r of results) {
     const key = r.session.projectDir;
@@ -30,7 +30,7 @@ function groupByProject(results: SessionSearchResult[]): Map<string, SessionSear
   return groups;
 }
 
-function sessionTitle(result: SessionSearchResult): string {
+export function sessionTitle(result: SessionSearchResult): string {
   if (result.session.customTitle) return result.session.customTitle;
   if (result.session.firstUserPrompt) {
     const prompt = result.session.firstUserPrompt.replace(/\n/g, " ").trim();
@@ -39,7 +39,7 @@ function sessionTitle(result: SessionSearchResult): string {
   return result.session.sessionId.slice(0, 8);
 }
 
-function formatTime(timestamp: string | null): string {
+export function formatTime(timestamp: string | null): string {
   if (!timestamp) return "";
   return new Date(timestamp).toLocaleString(undefined, {
     month: "short",
@@ -49,14 +49,18 @@ function formatTime(timestamp: string | null): string {
   });
 }
 
-function snippetToMarkdown(msg: MessageSnippet, assistantLabel: string): string {
+export function snippetToMarkdown(msg: MessageSnippet, assistantLabel: string): string {
   const label = msg.source === "user" ? "You" : assistantLabel;
   const time = formatTime(msg.timestamp);
   const header = time ? `**${label}** \u00a0\u00b7\u00a0 \`${time}\`` : `**${label}**`;
   return `${header}\n\n> ${msg.text.replace(/\n/g, "\n> ")}`;
 }
 
-function sessionDetailMarkdown(result: SessionSearchResult, isSearching: boolean, assistantLabel: string): string {
+export function sessionDetailMarkdown(
+  result: SessionSearchResult,
+  isSearching: boolean,
+  assistantLabel: string,
+): string {
   if (isSearching && result.matches.length > 0) {
     const header = `### ${result.matches.length} Match${result.matches.length > 1 ? "es" : ""}\n\n`;
     return (
