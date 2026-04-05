@@ -29,6 +29,7 @@ const WSL_SESSION_SCAN_SCRIPT = [
 
 interface CachedWslSession {
   sessionId: string;
+  projectDir: string;
   cwd: string;
   mtime: number;
   wslDistro: string;
@@ -39,65 +40,63 @@ interface CachedWslSession {
 let wslSessionCache: Map<string, CachedWslSession> | null = null;
 let wslScanInFlight: Promise<Map<string, CachedWslSession>> | null = null;
 
-function runWslScan(distro: string, signal?: AbortSignal): Promise<Map<string, CachedWslSession>> {
+function runWslScan(distro: string): Promise<Map<string, CachedWslSession>> {
   const cache = new Map<string, CachedWslSession>();
 
   let state = { cwd: null as string | null, sessionId: null as string | null };
-  let collector: MessageCollector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
   let curMessages: Array<{ content: string; source: "user" | "assistant"; timestamp: string | null }> = [];
+  let firstUserPrompt: string | null = null;
   let curFilenameId = "";
   let curMtime = 0;
 
-  return streamWslFiles(
-    distro,
-    WSL_SESSION_SCAN_SCRIPT,
-    [],
-    {
-      onFileStart(_projectDir, sessionId, mtime) {
-        state = { cwd: null, sessionId: null };
-        collector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
-        curMessages = [];
-        curFilenameId = sessionId;
-        curMtime = mtime;
-      },
-      onRecord(rec) {
-        processRecord(rec, state, collector, null, null);
-
-        if (isUserMessage(rec)) {
-          const content = (rec.payload as { message: string }).message;
-          curMessages.push({ content, source: "user", timestamp: (rec.timestamp as string) ?? null });
-        } else if (isAgentMessage(rec)) {
-          const content = (rec.payload as { message: string }).message;
-          curMessages.push({ content, source: "assistant", timestamp: (rec.timestamp as string) ?? null });
-        }
-      },
-      onFileEnd() {
-        if (!state.cwd) return;
-
-        const finalSessionId = state.sessionId ?? curFilenameId;
-        cache.set(`${distro}:${finalSessionId}`, {
-          sessionId: finalSessionId,
-          cwd: state.cwd,
-          mtime: curMtime,
-          wslDistro: distro,
-          messages: curMessages,
-          firstUserPrompt: collector.firstUserPrompt,
-        });
-      },
+  return streamWslFiles(distro, WSL_SESSION_SCAN_SCRIPT, [], {
+    onFileStart(_projectDir, sessionId, mtime) {
+      state = { cwd: null, sessionId: null };
+      curMessages = [];
+      firstUserPrompt = null;
+      curFilenameId = sessionId;
+      curMtime = mtime;
     },
-    signal,
-  ).then(() => cache);
+    onRecord(rec) {
+      if (rec.type === "session_meta") {
+        const payload = rec.payload as Record<string, unknown> | undefined;
+        if (payload?.cwd && !state.cwd) state.cwd = payload.cwd as string;
+        if (payload?.id) state.sessionId = payload.id as string;
+      }
+
+      if (isUserMessage(rec)) {
+        const content = (rec.payload as { message: string }).message;
+        if (!firstUserPrompt) firstUserPrompt = content.slice(0, 200);
+        curMessages.push({ content, source: "user", timestamp: (rec.timestamp as string) ?? null });
+      } else if (isAgentMessage(rec)) {
+        const content = (rec.payload as { message: string }).message;
+        curMessages.push({ content, source: "assistant", timestamp: (rec.timestamp as string) ?? null });
+      }
+    },
+    onFileEnd() {
+      if (!state.cwd) return;
+
+      const finalSessionId = state.sessionId ?? curFilenameId;
+      cache.set(`${distro}:${finalSessionId}`, {
+        sessionId: finalSessionId,
+        projectDir: buildWslKey(distro, state.cwd),
+        cwd: state.cwd,
+        mtime: curMtime,
+        wslDistro: distro,
+        messages: curMessages,
+        firstUserPrompt,
+      });
+    },
+  }).then(() => cache);
 }
 
-function ensureWslScan(distro: string, signal?: AbortSignal): Promise<Map<string, CachedWslSession>> {
+function ensureWslScan(distro: string): Promise<Map<string, CachedWslSession>> {
   if (wslSessionCache) return Promise.resolve(wslSessionCache);
   if (wslScanInFlight) return wslScanInFlight;
 
-  const t0 = Date.now();
-  wslScanInFlight = runWslScan(distro, signal)
+  wslScanInFlight = runWslScan(distro)
     .then((cache) => {
       wslSessionCache = cache;
-      console.log(`[codex] WSL scan complete: ${Date.now() - t0}ms, ${cache.size} sessions cached`);
       return cache;
     })
     .finally(() => {
@@ -116,8 +115,7 @@ function searchWslCache(
   const lowerQuery = query ? query.toLowerCase() : null;
 
   for (const session of cache.values()) {
-    const projectKey = buildWslKey(session.wslDistro, session.cwd);
-    if (projectFilter && projectKey !== projectFilter) continue;
+    if (projectFilter && session.projectDir !== projectFilter) continue;
 
     const collector: MessageCollector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
     for (const msg of session.messages) {
@@ -129,7 +127,7 @@ function searchWslCache(
     results.push({
       session: {
         sessionId: session.sessionId,
-        projectDir: projectKey,
+        projectDir: session.projectDir,
         projectPath: session.cwd,
         projectLabel: getProjectLabel(session.cwd),
         customTitle: null,
@@ -307,7 +305,6 @@ export const codexProvider: SessionProvider = {
 
     const wslPromise = (async () => {
       if (!wslEnabled()) return [];
-      const t0 = Date.now();
       const distro = await getDefaultWslDistro();
       if (!distro) return [];
 
@@ -315,13 +312,11 @@ export const codexProvider: SessionProvider = {
       const seen = new Set<string>();
       const projects: ProjectInfo[] = [];
       for (const session of cache.values()) {
-        const key = buildWslKey(session.wslDistro, session.cwd);
-        if (!seen.has(key)) {
-          seen.add(key);
-          projects.push({ dir: key, label: getProjectLabel(session.cwd) });
+        if (!seen.has(session.projectDir)) {
+          seen.add(session.projectDir);
+          projects.push({ dir: session.projectDir, label: getProjectLabel(session.cwd) });
         }
       }
-      console.log(`[codex] discoverProjects: ${Date.now() - t0}ms, ${projects.length} WSL projects`);
       return projects;
     })();
 
@@ -354,23 +349,16 @@ export const codexProvider: SessionProvider = {
 
     const wslPromise = (async () => {
       if (!wslEnabled() || (projectFilter && !isWslFilter)) return [];
-      const t0 = Date.now();
       const distro = await getDefaultWslDistro();
       if (!distro) return [];
 
-      const cache = await ensureWslScan(distro, signal);
-      const results = searchWslCache(cache, query, projectFilter);
-      console.log(`[codex] searchSessions WSL: ${Date.now() - t0}ms, ${results.length} results, query="${query}"`);
-      return results;
+      const cache = await ensureWslScan(distro);
+      return searchWslCache(cache, query, projectFilter);
     })();
 
-    const t0 = Date.now();
     const [nativeResults, wslResults] = await Promise.all([nativePromise, wslPromise]);
     const results = [...nativeResults, ...wslResults];
     results.sort((a, b) => b.session.lastModified - a.session.lastModified);
-    console.log(
-      `[codex] searchSessions TOTAL: ${Date.now() - t0}ms, native=${nativeResults.length} wsl=${wslResults.length}`,
-    );
     return results;
   },
 };

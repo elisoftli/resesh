@@ -109,7 +109,6 @@ export function SessionSearchView({ provider }: { provider: SessionProvider }) {
       onSearchTextChange={setSearchText}
       searchBarPlaceholder={provider.searchPlaceholder}
       filtering={false}
-      throttle
       searchBarAccessory={
         <List.Dropdown tooltip="Filter by Project" value={projectFilter} onChange={setProjectFilter}>
           <List.Dropdown.Item title="All Projects" value="all" icon={Icon.AppWindowGrid3x3} />
