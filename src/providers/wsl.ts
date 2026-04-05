@@ -6,32 +6,33 @@ const isWindows = process.platform === "win32";
 
 export const WSL_PREFIX = "wsl:";
 
-let distroCache: string[] | null = null;
+let defaultDistroPromise: Promise<string | null> | null = null;
 
 export function wslEnabled(): boolean {
   if (!isWindows) return false;
   return !!getPreferenceValues<Preferences>().includeWsl;
 }
 
-export async function listWslDistros(): Promise<string[]> {
-  if (!isWindows) return [];
-  if (distroCache) return distroCache;
+export function getDefaultWslDistro(): Promise<string | null> {
+  if (!isWindows) return Promise.resolve(null);
+  if (defaultDistroPromise) return defaultDistroPromise;
 
-  return new Promise((resolve) => {
-    execFile("wsl", ["-l", "-q"], { encoding: "utf16le", timeout: 5000 }, (err, stdout) => {
+  defaultDistroPromise = new Promise((resolve) => {
+    execFile("wsl", ["-l"], { encoding: "utf16le", timeout: 5000 }, (err, stdout) => {
       if (err) {
-        resolve([]);
+        resolve(null);
         return;
       }
-      const distros = stdout
+      const lines = stdout
         .replace(/\0/g, "")
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean);
-      distroCache = distros;
-      resolve(distros);
+      const defaultLine = lines.find((l) => l.includes("(Default)"));
+      resolve(defaultLine ? defaultLine.replace("(Default)", "").trim() : null);
     });
   });
+  return defaultDistroPromise;
 }
 
 export function buildWslKey(distro: string, dir: string): string {
@@ -75,8 +76,10 @@ export async function streamWslFiles(
   script: string,
   scriptArgs: string[],
   cb: WslScanCallbacks,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (!isWindows) return;
+  if (signal?.aborted) return;
 
   const args = ["-d", distro, "-e", "sh", "-c", script, "_", ...scriptArgs];
 
@@ -85,9 +88,19 @@ export async function streamWslFiles(
     const timer = setTimeout(() => proc.kill(), 30000);
     const rl = createInterface({ input: proc.stdout, crlfDelay: Infinity });
 
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      proc.kill();
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+
     let inFile = false;
 
     rl.on("line", (line) => {
+      if (signal?.aborted) return;
       if (line.startsWith("\tFILE\t")) {
         if (inFile) cb.onFileEnd();
         const parts = line.split("\t");
@@ -103,13 +116,13 @@ export async function streamWslFiles(
     });
 
     rl.on("close", () => {
-      clearTimeout(timer);
+      cleanup();
       if (inFile) cb.onFileEnd();
       resolve();
     });
 
     proc.on("error", () => {
-      clearTimeout(timer);
+      cleanup();
       resolve();
     });
 

@@ -6,24 +6,11 @@ import type { ProjectInfo, SessionSearchResult } from "../types";
 import { collectMessage, getProjectLabel, streamJsonl } from "../utils";
 import type { MessageCollector } from "../utils";
 import type { SessionProvider } from "./types";
-import { WSL_PREFIX, buildWslKey, execWsl, listWslDistros, parseWslFilter, streamWslFiles, wslEnabled } from "./wsl";
+import { WSL_PREFIX, buildWslKey, getDefaultWslDistro, parseWslFilter, streamWslFiles, wslEnabled } from "./wsl";
 
 const PROJECTS_DIR = path.join(homedir(), ".claude", "projects");
 
-// ----- WSL shell scripts (Claude-specific paths & structure) -----
-
-const WSL_DISCOVER_SCRIPT = [
-  'base="$HOME/.claude/projects"',
-  '[ -d "$base" ] || exit 0',
-  'for dir in "$base"/*/; do',
-  '[ -d "$dir" ] || continue',
-  'dname=$(basename "$dir")',
-  'first=$(find "$dir" -maxdepth 1 -name "*.jsonl" -print -quit 2>/dev/null)',
-  '[ -z "$first" ] && continue',
-  'cwd=$(grep -m1 \'"cwd"\' "$first" | sed \'s/.*"cwd" *: *"//;s/".*//\')',
-  'printf "%s\\t%s\\n" "$dname" "${cwd:-}"',
-  "done",
-].join("\n");
+// ----- WSL shell script (session scan with \tFILE\t protocol) -----
 
 const WSL_SESSION_SCAN_SCRIPT = [
   'base="$HOME/.claude/projects"',
@@ -43,6 +30,137 @@ const WSL_SESSION_SCAN_SCRIPT = [
   "done",
   "done",
 ].join("\n");
+
+// ----- WSL session cache (populated on first scan, searched in-memory afterwards) -----
+
+interface CachedWslSession {
+  sessionId: string;
+  projectDir: string;
+  cwd: string;
+  customTitle: string | null;
+  gitBranch: string | null;
+  mtime: number;
+  wslDistro: string;
+  messages: Array<{ content: string; source: "user" | "assistant"; timestamp: string | null }>;
+  firstUserPrompt: string | null;
+}
+
+let wslSessionCache: Map<string, CachedWslSession> | null = null;
+let wslScanInFlight: Promise<Map<string, CachedWslSession>> | null = null;
+
+function runWslScan(distro: string, signal?: AbortSignal): Promise<Map<string, CachedWslSession>> {
+  const cache = new Map<string, CachedWslSession>();
+
+  let state = { cwd: null as string | null, customTitle: null as string | null, gitBranch: null as string | null };
+  let collector: MessageCollector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
+  let curMessages: Array<{ content: string; source: "user" | "assistant"; timestamp: string | null }> = [];
+  let curProjectDir = "";
+  let curSessionId = "";
+  let curMtime = 0;
+
+  return streamWslFiles(
+    distro,
+    WSL_SESSION_SCAN_SCRIPT,
+    [""],
+    {
+      onFileStart(projectDir, sessionId, mtime) {
+        state = { cwd: null, customTitle: null, gitBranch: null };
+        collector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
+        curMessages = [];
+        curProjectDir = projectDir;
+        curSessionId = sessionId;
+        curMtime = mtime;
+      },
+      onRecord(rec) {
+        processRecord(rec, state, collector, null, null);
+
+        if (isUserMessage(rec)) {
+          const content = (rec.message as { content: string }).content;
+          curMessages.push({ content, source: "user", timestamp: (rec.timestamp as string) ?? null });
+        } else if (rec.type === "assistant" && Array.isArray((rec.message as Record<string, unknown>)?.content)) {
+          const text = getFirstTextBlock((rec.message as { content: unknown[] }).content);
+          if (text) {
+            curMessages.push({ content: text, source: "assistant", timestamp: (rec.timestamp as string) ?? null });
+          }
+        }
+      },
+      onFileEnd() {
+        if (!state.cwd) return;
+
+        const projectKey = buildWslKey(distro, curProjectDir);
+        cache.set(`${distro}:${curSessionId}`, {
+          sessionId: curSessionId,
+          projectDir: projectKey,
+          cwd: state.cwd,
+          customTitle: state.customTitle,
+          gitBranch: state.gitBranch,
+          mtime: curMtime,
+          wslDistro: distro,
+          messages: curMessages,
+          firstUserPrompt: collector.firstUserPrompt,
+        });
+      },
+    },
+    signal,
+  ).then(() => cache);
+}
+
+function ensureWslScan(distro: string, signal?: AbortSignal): Promise<Map<string, CachedWslSession>> {
+  if (wslSessionCache) return Promise.resolve(wslSessionCache);
+  if (wslScanInFlight) return wslScanInFlight;
+
+  const t0 = Date.now();
+  wslScanInFlight = runWslScan(distro, signal)
+    .then((cache) => {
+      wslSessionCache = cache;
+      console.log(`[claude] WSL scan complete: ${Date.now() - t0}ms, ${cache.size} sessions cached`);
+      return cache;
+    })
+    .finally(() => {
+      wslScanInFlight = null;
+    });
+
+  return wslScanInFlight;
+}
+
+function searchWslCache(
+  cache: Map<string, CachedWslSession>,
+  query: string,
+  projectFilter: string | null,
+): SessionSearchResult[] {
+  const results: SessionSearchResult[] = [];
+  const lowerQuery = query ? query.toLowerCase() : null;
+
+  for (const session of cache.values()) {
+    if (projectFilter && session.projectDir !== projectFilter) continue;
+
+    const collector: MessageCollector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
+    for (const msg of session.messages) {
+      collectMessage(collector, msg.content, msg.source, msg.timestamp, query || null, lowerQuery);
+    }
+
+    if (query && collector.matchCount === 0) continue;
+
+    results.push({
+      session: {
+        sessionId: session.sessionId,
+        projectDir: session.projectDir,
+        projectPath: session.cwd,
+        projectLabel: getProjectLabel(session.cwd),
+        customTitle: session.customTitle,
+        firstUserPrompt: session.firstUserPrompt ?? collector.firstUserPrompt,
+        lastModified: session.mtime,
+        gitBranch: session.gitBranch,
+        wslDistro: session.wslDistro,
+      },
+      matchCount: collector.matchCount,
+      matches: collector.matches,
+      preview: collector.preview,
+    });
+  }
+
+  return results;
+}
 
 // ----- JSONL record helpers -----
 
@@ -239,31 +357,19 @@ export const claudeProvider: SessionProvider = {
 
     const wslPromise = (async () => {
       if (!wslEnabled()) return [];
-      const distros = await listWslDistros();
-      const projects: ProjectInfo[] = [];
+      const t0 = Date.now();
+      const distro = await getDefaultWslDistro();
+      if (!distro) return [];
 
-      const perDistro = await Promise.all(
-        distros.map(async (distro) => {
-          const stdout = await execWsl(distro, WSL_DISCOVER_SCRIPT);
-          return { distro, stdout };
-        }),
-      );
-      for (const { distro, stdout } of perDistro) {
-        for (const line of stdout.trim().split("\n").filter(Boolean)) {
-          const idx = line.indexOf("\t");
-          const dir = idx >= 0 ? line.slice(0, idx) : line;
-          const cwd = idx >= 0 ? line.slice(idx + 1) : null;
-          if (cwd) {
-            projects.push({ dir: buildWslKey(distro, dir), label: getProjectLabel(cwd) });
-          } else {
-            const segments = dir.split("-").filter(Boolean);
-            projects.push({
-              dir: buildWslKey(distro, dir),
-              label: segments.slice(-2).join("/"),
-            });
-          }
+      const cache = await ensureWslScan(distro);
+      const projectMap = new Map<string, string>();
+      for (const session of cache.values()) {
+        if (!projectMap.has(session.projectDir)) {
+          projectMap.set(session.projectDir, getProjectLabel(session.cwd));
         }
       }
+      const projects = Array.from(projectMap, ([dir, label]) => ({ dir, label }));
+      console.log(`[claude] discoverProjects: ${Date.now() - t0}ms, ${projects.length} WSL projects`);
       return projects;
     })();
 
@@ -281,6 +387,7 @@ export const claudeProvider: SessionProvider = {
     const nativePromise = isWslFilter
       ? Promise.resolve([])
       : (async () => {
+          const nt0 = Date.now();
           const projectDirs = await listProjectDirs(projectFilter);
           const results: SessionSearchResult[] = [];
 
@@ -296,63 +403,33 @@ export const claudeProvider: SessionProvider = {
               results.push(parsed);
             }
           }
+          console.log(
+            `[claude] searchSessions NATIVE: ${Date.now() - nt0}ms, ${projectDirs.length} projects, ${results.length} results, aborted=${!!signal?.aborted}`,
+          );
           return results;
         })();
 
     const wslPromise = (async () => {
       if (!wslEnabled() || (projectFilter && !isWslFilter)) return [];
-      const wslFilter = parseWslFilter(projectFilter);
-      const distros = wslFilter ? [wslFilter.distro] : await listWslDistros();
-      const results: SessionSearchResult[] = [];
-      const lowerQuery = query ? query.toLowerCase() : null;
+      const t0 = Date.now();
+      const distro = await getDefaultWslDistro();
+      if (!distro) return [];
 
-      await Promise.all(
-        distros.map((distro) => {
-          let state = {
-            cwd: null as string | null,
-            customTitle: null as string | null,
-            gitBranch: null as string | null,
-          };
-          let collector: MessageCollector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
-          let curProjectDir = "";
-          let curSessionId = "";
-          let curMtime = 0;
-
-          return streamWslFiles(distro, WSL_SESSION_SCAN_SCRIPT, [wslFilter?.distro === distro ? wslFilter.dir : ""], {
-            onFileStart(projectDir, sessionId, mtime) {
-              state = { cwd: null, customTitle: null, gitBranch: null };
-              collector = { firstUserPrompt: null, matchCount: 0, matches: [], preview: [] };
-              curProjectDir = projectDir;
-              curSessionId = sessionId;
-              curMtime = mtime;
-            },
-            onRecord(rec) {
-              if (signal?.aborted) return;
-              processRecord(rec, state, collector, query || null, lowerQuery);
-            },
-            onFileEnd() {
-              if (signal?.aborted) return;
-              const parsed = buildResult(
-                state,
-                collector,
-                curSessionId,
-                buildWslKey(distro, curProjectDir),
-                curMtime,
-                distro,
-              );
-              if (!parsed) return;
-              if (query && parsed.matchCount === 0) return;
-              results.push(parsed);
-            },
-          });
-        }),
+      const cache = await ensureWslScan(distro, signal);
+      const results = searchWslCache(cache, query, projectFilter);
+      console.log(
+        `[claude] searchSessions WSL: ${Date.now() - t0}ms, ${results.length} results, query="${query}"`,
       );
       return results;
     })();
 
+    const t0 = Date.now();
     const [nativeResults, wslResults] = await Promise.all([nativePromise, wslPromise]);
     const results = [...nativeResults, ...wslResults];
     results.sort((a, b) => b.session.lastModified - a.session.lastModified);
+    console.log(
+      `[claude] searchSessions TOTAL: ${Date.now() - t0}ms, native=${nativeResults.length} wsl=${wslResults.length}`,
+    );
     return results;
   },
 };

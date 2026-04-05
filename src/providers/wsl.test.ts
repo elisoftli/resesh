@@ -105,10 +105,10 @@ describe.skipIf(isWindows)("wslEnabled (non-Windows)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// listWslDistros — platform-dependent, mocked child_process
+// getDefaultWslDistro — platform-dependent, mocked child_process
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!isWindows)("listWslDistros (Windows)", () => {
+describe.skipIf(!isWindows)("getDefaultWslDistro (Windows)", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -118,20 +118,20 @@ describe.skipIf(!isWindows)("listWslDistros (Windows)", () => {
     vi.resetModules();
   });
 
-  it("returns parsed distro names", async () => {
+  it("returns the default distro name", async () => {
     vi.doMock("child_process", () => ({
       execFile: vi.fn((_cmd: string, _args: string[], _opts: unknown, cb: (...args: unknown[]) => void) => {
-        cb(null, "Ubuntu\r\nDebian\r\n");
+        cb(null, "Windows Subsystem for Linux Distributions:\r\nUbuntu (Default)\r\nDebian\r\n");
       }),
       spawn: vi.fn(),
     }));
 
-    const { listWslDistros } = await import("./wsl");
-    const distros = await listWslDistros();
-    expect(distros).toEqual(["Ubuntu", "Debian"]);
+    const { getDefaultWslDistro } = await import("./wsl");
+    const distro = await getDefaultWslDistro();
+    expect(distro).toBe("Ubuntu");
   });
 
-  it("returns empty array on error", async () => {
+  it("returns null on error", async () => {
     vi.doMock("child_process", () => ({
       execFile: vi.fn((_cmd: string, _args: string[], _opts: unknown, cb: (...args: unknown[]) => void) => {
         cb(new Error("not found"));
@@ -139,17 +139,17 @@ describe.skipIf(!isWindows)("listWslDistros (Windows)", () => {
       spawn: vi.fn(),
     }));
 
-    const { listWslDistros } = await import("./wsl");
-    const distros = await listWslDistros();
-    expect(distros).toEqual([]);
+    const { getDefaultWslDistro } = await import("./wsl");
+    const distro = await getDefaultWslDistro();
+    expect(distro).toBeNull();
   });
 });
 
-describe.skipIf(isWindows)("listWslDistros (non-Windows)", () => {
-  it("returns empty array", async () => {
-    const { listWslDistros } = await import("./wsl");
-    const distros = await listWslDistros();
-    expect(distros).toEqual([]);
+describe.skipIf(isWindows)("getDefaultWslDistro (non-Windows)", () => {
+  it("returns null", async () => {
+    const { getDefaultWslDistro } = await import("./wsl");
+    const distro = await getDefaultWslDistro();
+    expect(distro).toBeNull();
   });
 });
 
