@@ -6,7 +6,7 @@ import type { ProjectInfo, SessionSearchResult } from "../types";
 import { collectMessage, getProjectLabel, streamJsonl } from "../utils";
 import type { MessageCollector } from "../utils";
 import type { SessionProvider } from "./types";
-import { WSL_PREFIX, buildWslKey, getDefaultWslDistro, parseWslFilter, streamWslFiles, wslEnabled } from "./wsl";
+import { WSL_PREFIX, buildWslKey, getDefaultWslDistro, streamWslFiles, wslEnabled } from "./wsl";
 
 const PROJECTS_DIR = path.join(homedir(), ".claude", "projects");
 
@@ -417,9 +417,7 @@ export const claudeProvider: SessionProvider = {
 
       const cache = await ensureWslScan(distro, signal);
       const results = searchWslCache(cache, query, projectFilter);
-      console.log(
-        `[claude] searchSessions WSL: ${Date.now() - t0}ms, ${results.length} results, query="${query}"`,
-      );
+      console.log(`[claude] searchSessions WSL: ${Date.now() - t0}ms, ${results.length} results, query="${query}"`);
       return results;
     })();
 

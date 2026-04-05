@@ -6,7 +6,7 @@ import type { ProjectInfo, SessionSearchResult } from "../types";
 import { collectMessage, getProjectLabel, streamJsonl } from "../utils";
 import type { MessageCollector } from "../utils";
 import type { SessionProvider } from "./types";
-import { WSL_PREFIX, buildWslKey, getDefaultWslDistro, parseWslFilter, streamWslFiles, wslEnabled } from "./wsl";
+import { WSL_PREFIX, buildWslKey, getDefaultWslDistro, streamWslFiles, wslEnabled } from "./wsl";
 
 const SESSIONS_DIR = path.join(homedir(), ".codex", "sessions");
 const UUID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/;
@@ -360,9 +360,7 @@ export const codexProvider: SessionProvider = {
 
       const cache = await ensureWslScan(distro, signal);
       const results = searchWslCache(cache, query, projectFilter);
-      console.log(
-        `[codex] searchSessions WSL: ${Date.now() - t0}ms, ${results.length} results, query="${query}"`,
-      );
+      console.log(`[codex] searchSessions WSL: ${Date.now() - t0}ms, ${results.length} results, query="${query}"`);
       return results;
     })();
 
